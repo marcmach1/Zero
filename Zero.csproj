@@ -7,4 +7,8 @@
     <UserSecretsId>733227c3-200d-49de-9653-21c06b9c8b38</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Telegram.Bot" Version="22.9.5.3" />
+  </ItemGroup>
+
 </Project>

@@ -23,7 +23,7 @@ public class ZeroController : ControllerBase
     public async Task<IActionResult> GetSurfReport([FromServices] SurfService surfService, [FromServices] GeminiService geminiService)
     {
         // 1. Busca os dados brutos da API de Maré
-        var dadosBrutos = await surfService.ObterDadosMaritimos();
+        var dadosBrutos = await surfService.ObterDadosMaritimos(-26.89, -48.65);
 
         // 2. Cria o prompt especial enviando os dados para o seu "Surfista IA"
         var promptComDados = $"Analise estes dados reais de agora em Navegantes e me dê o boletim: {dadosBrutos}";

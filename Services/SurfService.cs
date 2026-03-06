@@ -14,21 +14,19 @@ namespace Zero.Services
             _httpClient = httpClient;
         }
 
-        public async Task<string> ObterDadosMaritimos()
+        // Agora o método recebe latitude e longitude de quem o chama
+        public async Task<string> ObterDadosMaritimos(double lat, double lon)
         {
             try
             {
-                // API Open-Meteo (Marine) - Pega altura da onda, período e direção
-                var url = $"https://marine-api.open-meteo.com/v1/marine?latitude={Lat}&longitude={Lon}&current=wave_height,wave_period,wave_direction,wind_wave_height&timezone=America%2FSao_Paulo";
+                var url = $"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&current=wave_height,wave_period,wave_direction,wind_wave_height&timezone=America%2FSao_Paulo";
 
                 var response = await _httpClient.GetFromJsonAsync<dynamic>(url);
-                
-                // Retornamos como string para enviar direto ao Gemini processar
-                return response?.ToString() ?? "Não foi possível obter dados do mar.";
+                return response?.ToString() ?? "Dados indisponíveis.";
             }
             catch (Exception ex)
             {
-                return $"Erro ao conectar com a API de ondas: {ex.Message}";
+                return $"Erro na API de ondas: {ex.Message}";
             }
         }
     }
