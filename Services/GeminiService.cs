@@ -18,9 +18,13 @@ public class GeminiService
     {
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
-        var payload = new
-        {
-            contents = new[] { new { parts = new[] { new { text = mensagem } } } }
+        var payload = new {
+        contents = new[] { 
+            new { 
+                role = "user", // O "chefe" dando as ordens
+                parts = new[] { new { text = $"Você é o Zero, um assistente que se comunica como um surfista. Responda a esta pergunta de forma curta: {mensagem}" } } 
+            }   
+        }
         };
 
         var json = JsonSerializer.Serialize(payload);
