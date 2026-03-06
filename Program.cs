@@ -4,6 +4,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 
 builder.Services.AddScoped<Zero.Services.GeminiService>();
+builder.Services.AddHttpClient<Zero.Services.SurfService>();
 
 var app = builder.Build();
 
