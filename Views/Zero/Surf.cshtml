@@ -1,0 +1,25 @@
+@{
+    ViewData["Title"] = "Boletim do Surf";
+}
+
+<h2>Boletim do Surf</h2>
+<div id="surf-boletim" style="font-size:1.2em; margin-top:1em;">
+    Carregando...
+</div>
+
+<script>
+async function fetchBoletim() {
+    try {
+        const response = await fetch('/zero/surf');
+        if (!response.ok) {
+            document.getElementById('surf-boletim').innerText = 'Erro ao buscar boletim.';
+            return;
+        }
+        const data = await response.json();
+        document.getElementById('surf-boletim').innerText = data.boletim || 'Sem dados.';
+    } catch (e) {
+        document.getElementById('surf-boletim').innerText = 'Erro de conexão.';
+    }
+}
+fetchBoletim();
+</script>

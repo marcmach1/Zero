@@ -19,7 +19,7 @@ namespace Zero.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("🐕 Watchdog de Surf iniciado e patrulhando Navegantes...");
+            _logger.LogInformation("🐕 Watchdog de Surf iniciado e patrulhando...");
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -42,7 +42,7 @@ namespace Zero.Services
                             // 1. Busca dados reais (Coordenadas de Navega)
                             var dados = await surfService.ObterDadosMaritimos(-26.89, -48.65);
 
-                            // 2. Prompt "Filtro de Chatisse" para o Gemini
+                            // 2. Prompt para o Gemini
                             var prompt = $@"
                             Analise estes dados de hoje em Navegantes: {dados}. 
                             Critérios para MAR BOM: Altura > 0.6m, Período > 7s e vento fraco ou terral.

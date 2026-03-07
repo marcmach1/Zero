@@ -5,7 +5,7 @@ namespace Zero.Controllers;
 
 [ApiController]
 [Route("zero")]
-public class ZeroController : ControllerBase
+public class ZeroController : Controller
 {
     private readonly GeminiService _geminiService;
     private readonly SurfService _surfService;
@@ -43,5 +43,11 @@ public class ZeroController : ControllerBase
         var resposta = await _geminiService.Perguntar(promptComDados);
 
         return Ok(new { boletim = resposta });
+    }
+
+    [HttpGet("surf/view")]
+    public IActionResult SurfView()
+    {
+        return View("Surf");
     }
 }
