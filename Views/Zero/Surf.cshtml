@@ -1,25 +1,146 @@
 @{
-    ViewData["Title"] = "Boletim do Surf";
+    Layout = "_Layout"; 
+    ViewData["Title"] = "Boletim do Zero";
 }
 
-<h2>Boletim do Surf</h2>
-<div id="surf-boletim" style="font-size:1.2em; margin-top:1em;">
-    Carregando...
+<style>
+    /* 1. Fundo e Reset */
+    body {
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+        color: white;
+        font-family: 'Segoe UI', Roboto, sans-serif;
+        min-height: 100vh;
+        margin: 0;
+    }
+
+    /* 2. Container de Centralização (O pulo do gato para o Menu não quebrar) */
+    .content-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 40px 15px;
+        min-height: 85vh; /* Ocupa o centro da tela abaixo do menu */
+    }
+
+    /* 3. O Card Principal */
+    .surf-card {
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border-radius: 24px;
+        padding: 35px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        max-width: 500px;
+        width: 100%;
+        color: white;
+        animation: fadeIn 0.8s ease-out;
+    }
+
+    /* 4. Estilo do Texto do Zero */
+    .boletim-texto {
+        font-size: 1.15em;
+        line-height: 1.8;
+        white-space: pre-line;
+        margin: 20px 0;
+        color: #f0f0f0;
+    }
+
+    /* Destaca as métricas em negrito que o Zero enviar */
+    .boletim-texto b, .boletim-texto strong {
+        color: #00d2ff;
+        text-shadow: 0 0 10px rgba(0, 210, 255, 0.4);
+    }
+
+    /* 5. Botão do WhatsApp */
+    .btn-zap {
+        background-color: #25d366;
+        color: white;
+        border: none;
+        padding: 14px 28px;
+        border-radius: 50px;
+        font-weight: bold;
+        transition: 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+        box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        cursor: pointer;
+    }
+
+    .btn-zap:hover {
+        background-color: #128c7e;
+        transform: scale(1.05);
+        color: white;
+        box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+    }
+
+    .loader { text-align: center; padding: 30px; }
+
+    /* Animação de entrada */
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(15px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+<div class="content-wrapper">
+    <div class="surf-card">
+        <h2 class="text-center">🌊 Relatório do Zero</h2>
+        <p class="text-center text-info" id="cidade-nome" style="letter-spacing: 1px;">📍 LOCALIZANDO...</p>
+
+        <div id="surf-boletim" class="boletim-texto">
+            <div class="loader">
+                <div class="spinner-border text-info" role="status"></div>
+                <p class="mt-3">Zero está checando a vala...</p>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button onclick="compartilharZap()" class="btn-zap">
+                <i class="fab fa-whatsapp"></i> Mandar pro Grupo 🏄‍♂️
+            </button>
+            <br>
+            <a href="/" class="btn btn-link btn-sm mt-3 text-white-50 text-decoration-none">← Voltar para Home</a>
+        </div>
+    </div>
 </div>
 
 <script>
-async function fetchBoletim() {
-    try {
-        const response = await fetch('/zero/surf');
-        if (!response.ok) {
-            document.getElementById('surf-boletim').innerText = 'Erro ao buscar boletim.';
-            return;
+    // Busca o boletim via API
+    async function fetchBoletim() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const lat = urlParams.get('lat') || '-26.89';
+            const lon = urlParams.get('lon') || '-48.65';
+
+            const response = await fetch(`/zero/surf?lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+            
+            if(data.cidade) {
+                document.getElementById('cidade-nome').innerText = `📍 ${data.cidade.toUpperCase()}`;
+            }
+
+            // Insere o texto da IA no card
+            document.getElementById('surf-boletim').innerText = data.boletim;
+
+        } catch (e) {
+            document.getElementById('surf-boletim').innerHTML = 
+                '<p class="text-danger text-center">Putz! O Zero tomou um caixote. <br> Tente atualizar a página.</p>';
         }
-        const data = await response.json();
-        document.getElementById('surf-boletim').innerText = data.boletim || 'Sem dados.';
-    } catch (e) {
-        document.getElementById('surf-boletim').innerText = 'Erro de conexão.';
     }
-}
-fetchBoletim();
+
+    // Formata e envia para o WhatsApp
+    function compartilharZap() {
+        let texto = document.getElementById('surf-boletim').innerText;
+        let cidade = document.getElementById('cidade-nome').innerText;
+        
+        // Formata a mensagem com negritos para o Zap
+        const mensagem = `📌 *${cidade}*\n\n${texto}`;
+        const url = "https://api.whatsapp.com/send?text=" + encodeURIComponent(mensagem);
+        
+        window.open(url, '_blank');
+    }
+
+    // Inicia o processo ao carregar a página
+    fetchBoletim();
 </script>

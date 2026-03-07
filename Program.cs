@@ -18,9 +18,11 @@ if (string.IsNullOrEmpty(geminiKey)) {
 
 builder.Services.AddSingleton(new GeminiService(geminiKey ?? ""));
 
+builder.Services.AddSingleton<LocationService>();
 builder.Services.AddScoped<SurfService>();
 builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddHostedService<SurfWatchdog>();
+
 
 var app = builder.Build();
 

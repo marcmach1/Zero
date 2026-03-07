@@ -11,7 +11,7 @@ public class GeminiService
 
     public GeminiService(string apiKey)
     {
-        _apiKey = apiKey; // Sem segredos, direto ao ponto
+        _apiKey = apiKey;
         _httpClient = new HttpClient();
     }
 
