@@ -7,29 +7,40 @@ namespace Zero.Controllers;
 [Route("zero")]
 public class ZeroController : ControllerBase
 {
-    private readonly GeminiService _gemini;
+    private readonly GeminiService _geminiService;
+    private readonly SurfService _surfService;
 
-    public ZeroController(GeminiService gemini) => _gemini = gemini;
+    // Injetamos tudo aqui no início. É o jeito mais seguro e limpo!
+    public ZeroController(GeminiService geminiService, SurfService surfService)
+    {
+        _geminiService = geminiService;
+        _surfService = surfService;
+    }
 
     [HttpGet("perguntar")]
     public async Task<IActionResult> Get(string prompt)
     {
-        var resposta = await _gemini.Perguntar(prompt);
+        var resposta = await _geminiService.Perguntar(prompt);
         return Ok(new { resposta });
     }
 
-
     [HttpGet("surf")]
-    public async Task<IActionResult> GetSurfReport([FromServices] SurfService surfService, [FromServices] GeminiService geminiService)
+    public async Task<IActionResult> GetSurfReport()
     {
-        // 1. Busca os dados brutos da API de Maré
-        var dadosBrutos = await surfService.ObterDadosMaritimos(-26.89, -48.65);
+        // 1. Busca os dados brutos (O SurfService agora está blindado contra o 400/403)
+        var dadosBrutos = await _surfService.ObterDadosMaritimos(-26.89, -48.65);
 
-        // 2. Cria o prompt especial enviando os dados para o seu "Surfista IA"
+        // 2. Se o serviço retornou erro, a gente mostra o que aconteceu
+        if (dadosBrutos.Contains("Erro"))
+        {
+            return StatusCode(500, new { erro = "A API de surf falhou", detalhes = dadosBrutos });
+        }
+
+        // 3. Cria o prompt para a IA
         var promptComDados = $"Analise estes dados reais de agora em Navegantes e me dê o boletim: {dadosBrutos}";
 
-        // 3. O Gemini processa com a personalidade que você já configurou
-        var resposta = await geminiService.Perguntar(promptComDados);
+        // 4. O Gemini processa
+        var resposta = await _geminiService.Perguntar(promptComDados);
 
         return Ok(new { boletim = resposta });
     }

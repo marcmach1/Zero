@@ -74,6 +74,8 @@ ScaffoldingReadMe.txt
 # StyleCop
 StyleCopReport.xml
 
+
+
 # Files built by Visual Studio
 *_i.c
 *_p.c
@@ -482,3 +484,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+
+# Configurações com Chaves Sensíveis
+appsettings.json
+appsettings.Development.json
+Properties/launchSettings.json

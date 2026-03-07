@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Zero.Services;
 
@@ -8,40 +9,54 @@ public class GeminiService
     private readonly string _apiKey;
     private readonly HttpClient _httpClient;
 
-    public GeminiService(IConfiguration configuration)
+    public GeminiService(string apiKey)
     {
-        _apiKey = configuration["GeminiApiKey"] ?? throw new Exception("Chave API não encontrada!");
+        _apiKey = apiKey; // Sem segredos, direto ao ponto
         _httpClient = new HttpClient();
     }
 
     public async Task<string> Perguntar(string mensagem)
     {
+        try 
+        {
+            // O MODELO DO SUCESSO: gemini-3.1-flash-lite-preview
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key={_apiKey}";
+            
+            var payload = new {
+                contents = new[] { 
+                    new { 
+                        parts = new[] { 
+                            new { text = $"Você é o Zero, um surfista local de Navegantes/SC. Analise os dados e dê um boletim curto, sincero e com gírias de surf: {mensagem}" } 
+                        } 
+                    }   
+                }
+            };
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
-        var payload = new {
-        contents = new[] { 
-            new { 
-                role = "user", // O "chefe" dando as ordens
-                parts = new[] { new { text = $"Você é o Zero, um assistente que se comunica como um surfista. Responda a esta pergunta de forma curta: {mensagem}" } } 
-            }   
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync(url, content);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"--- ERRO NA CHAMADA ---");
+                Console.WriteLine(responseBody);
+                return $"Erro: {response.StatusCode}";
+            }
+
+            using var doc = JsonDocument.Parse(responseBody);
+            
+            // Extração da resposta
+            return doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text").GetString() ?? "O mar tá em silêncio...";
         }
-        };
-
-        var json = JsonSerializer.Serialize(payload);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        var response = await _httpClient.PostAsync(url, content);
-        var responseBody = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-            return $"Erro na API: {response.StatusCode}";
-
-        // Extrai apenas o texto da resposta gigante do Google
-        using var doc = JsonDocument.Parse(responseBody);
-        return doc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text").GetString() ?? "Sem resposta.";
+        catch (Exception ex)
+        {
+            return $"Erro fatal no Zero: {ex.Message}";
+        }
     }
 }
