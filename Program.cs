@@ -5,17 +5,25 @@ var builder = WebApplication.CreateBuilder(args);
 // --- Configuração dos Serviços ---
 builder.Services.AddControllersWithViews();
 
-var geminiKey = builder.Configuration["GeminiApiKey"] ?? "";
+// --- Configuração dos Serviços ---
+builder.Services.AddControllersWithViews();
 
+// 1. Tenta buscar no formato Seção:Chave (O que o Balta recomenda)
+var geminiKey = builder.Configuration["Gemini:ApiKey"];
+
+// 2. Fallback: Se não achou na seção, tenta o nome antigo (Sua AppSettings anterior)
 if (string.IsNullOrEmpty(geminiKey)) {
-    // Força a leitura manual do arquivo se o .NET se perder
-    var config = new ConfigurationBuilder()
-        .SetBasePath(Directory.GetCurrentDirectory())
-        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .Build();
-    geminiKey = config["GeminiApiKey"] ?? "";
+    geminiKey = builder.Configuration["GeminiApiKey"];
 }
 
+// Log para você ter CERTEZA no terminal se a chave carregou
+if (string.IsNullOrEmpty(geminiKey)) {
+    Console.WriteLine("⚠️ ERRO: Chave do Gemini não encontrada nas configurações!");
+} else {
+    Console.WriteLine("✅ Chave do Gemini carregada com sucesso.");
+}
+
+// Registra o serviço com a chave encontrada
 builder.Services.AddSingleton(new GeminiService(geminiKey ?? ""));
 
 builder.Services.AddSingleton<LocationService>();

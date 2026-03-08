@@ -50,7 +50,9 @@
     .boletim-texto b, .boletim-texto strong {
         color: #00d2ff;
         text-shadow: 0 0 10px rgba(0, 210, 255, 0.4);
+        font-weight: bold;
     }
+
 
     /* 5. Botão do WhatsApp */
     .btn-zap {
@@ -143,4 +145,52 @@
 
     // Inicia o processo ao carregar a página
     fetchBoletim();
+
+
+
+    // Função para transformar o Markdown do Gemini (**texto**) em HTML (<strong>texto</strong>)
+    function formatarTextoZero(texto) {
+        if (!texto) return "";
+        return texto
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Transforma ** em negrito
+            .trim();
+    }
+
+    async function fetchBoletim() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const lat = urlParams.get('lat') || '-26.89';
+            const lon = urlParams.get('lon') || '-48.65';
+
+            const response = await fetch(`/zero/surf?lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+            
+            if(data.cidade) {
+                document.getElementById('cidade-nome').innerText = `📍 ${data.cidade.toUpperCase()}`;
+            }
+
+            // O PULO DO GATO: Usamos innerHTML e a função de formatação
+            const display = document.getElementById('surf-boletim');
+            display.innerHTML = formatarTextoZero(data.boletim);
+
+        } catch (e) {
+            document.getElementById('surf-boletim').innerHTML = 
+                '<p class="text-danger text-center">Putz! O Zero tomou um caixote. <br> Tente atualizar a página.</p>';
+        }
+    }
+
+    function compartilharZap() {
+        // No Zap, mantemos o texto puro (com as estrelinhas que o Zap entende como negrito)
+        let texto = document.getElementById('surf-boletim').innerText;
+        let cidade = document.getElementById('cidade-nome').innerText;
+        
+        const mensagem = `📌 *${cidade}*\n\n${texto}\n\n_Enviado pelo App do Zero_ 🌊`;
+        const url = "https://api.whatsapp.com/send?text=" + encodeURIComponent(mensagem);
+        
+        window.open(url, '_blank');
+    }
+
+    fetchBoletim();
+
+
 </script>
