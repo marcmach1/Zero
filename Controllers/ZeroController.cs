@@ -85,8 +85,8 @@ public IActionResult BoletimLocal(double lat, double lon)
             int climaCode = SafeGetInt(hourlyVento.GetProperty("weathercode")[indiceHora]);
 
             // 5. Traduções
-            string climaTraduzido = WeatherHelper.TraduzirWeatherCode(climaCode);
-            string ventoCardeal = WeatherHelper.ConverterDirecaoVento(ventoDir);
+            string climaTraduzido = Helpers.WeatherHelper.TraduzirWeatherCode(climaCode);
+            string ventoCardeal = Helpers.WeatherHelper.ConverterDirecaoVento(ventoDir);
 
             // 6. Lógica de strings para o Prompt (Avisa o Zero se a onda sumiu)
             string infoOndas = (altura <= 0) ? "Sensores de boia temporariamente offline" : $"{altura}m";
