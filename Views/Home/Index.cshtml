@@ -1,50 +1,228 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Zero - Previsão de Surf";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<style>
+    body {
+        background: linear-gradient(135deg, #071324 0%, #0c213d 100%);
+        color: white;
+        min-height: 100vh;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .hero-section {
+        padding: 60px 0 40px;
+        text-align: center;
+    }
+
+    .wave-logo {
+        width: 80px;
+        margin-bottom: 20px;
+        filter: drop-shadow(0 0 10px rgba(0, 210, 255, 0.5));
+    }
+
+    .previsao-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 20px;
+        padding: 20px 10px 40px;
+        justify-content: center;
+    }
+
+    .previsao-container::-webkit-scrollbar { display: none; }
+
+    .surf-card {
+        min-width: 280px;
+        background: #002b5c;
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        border: 1px solid rgba(255,255,255,0.05);
+        transition: transform 0.3s ease;
+    }
+
+    .card-header {
+        background: #001a38;
+        padding: 12px;
+        font-weight: 800;
+        font-size: 0.85rem;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+
+    .grid-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        border-right: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .label-box { background: #4a90e2; width: 100%; text-align: center; padding: 6px 0; font-size: 0.65rem; font-weight: 900; }
+    .value-box { padding: 20px 0; font-size: 1.2rem; font-weight: 700; }
+    .sub-value-box { background: #001226; width: 100%; text-align: center; padding: 8px 0; font-size: 0.8rem; color: #8da2b5; }
+
+    /* Estilo do Balão de Fala do Zero */
+    .boletim-zero {
+        background: #fff;
+        color: #333;
+        padding: 25px;
+        border-radius: 20px;
+        margin: 20px auto;
+        max-width: 600px;
+        position: relative;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        display: none; /* Escondido por padrão */
+    }
+
+    .boletim-zero::after {
+        content: '';
+        position: absolute;
+        top: -15px;
+        left: 50%;
+        border-width: 0 15px 15px;
+        border-style: solid;
+        border-color: #fff transparent;
+        display: block;
+        width: 0;
+    }
+
+    .btn-analise {
+        background: #4fc3f7;
+        color: #002b5c;
+        border: none;
+        padding: 18px 45px;
+        border-radius: 50px;
+        font-weight: 800;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+
+    .seta { color: #4fc3f7; margin-right: 5px; display: inline-block; }
+</style>
+
+<div class="hero-section">
+    <img src="https://cdn-icons-png.flaticon.com/512/3144/3144573.png" class="wave-logo" alt="Logo">
+    <h1 class="fw-bold">BOLETIM DO ZERO</h1>
+    <p class="text-info opacity-75">Navegantes, Santa Catarina</p>
 </div>
 
+<div id="previsao-lista" class="previsao-container">
+    <div class="spinner-border text-info" role="status"></div>
+</div>
 
-<div class="text-center mt-5">
-    <h2 class="display-4">E aí, vai cair? 🌊</h2>
-    <p>Clique no botão abaixo para o Zero analisar as condições aí onde você está.</p>
-    
-    <button onclick="buscarBoletimLocal()" class="btn btn-primary btn-lg shadow">
-        <i class="fas fa-map-marker-alt"></i> Ver Maré Local
+<div id="boletim-container" class="boletim-zero">
+    <h5 class="fw-bold text-primary mb-2">🏄‍♂️ Zero diz:</h5>
+    <p id="texto-boletim" style="line-height: 1.6;"></p>
+</div>
+
+<div class="text-center pb-5">
+    <button onclick="buscarBoletimLocal()" class="btn-analise" id="btn-analisar">
+        <i class="fas fa-robot"></i> Pedir Análise do Zero
     </button>
-
-    <div id="loader" class="mt-3" style="display:none;">
+    
+    <div id="loader" style="display:none;" class="mt-4">
         <div class="spinner-border text-info" role="status"></div>
-        <p class="text-info">Zero está remando para o outside... peraí!</p>
+        <p class="text-info mt-2">Zero está remando para o outside...</p>
     </div>
 </div>
 
-
 <script>
-    function buscarBoletimLocal() {
-        // Mostra o loader e esconde o botão
-        document.getElementById('loader').style.display = 'block';
+    // 1. Carrega os cards iniciais
+    async function carregarPrevisao() {
+        try {
+            const response = await fetch('/zero/surf?lat=-26.89&lon=-48.65');
+            const data = await response.json();
+
+            if (data.previsaoCards) {
+                const html = data.previsaoCards.map(card => `
+                    <div class="surf-card">
+                        <div class="card-header">${card.titulo}</div>
+                        <div class="card-grid">
+                            <div class="grid-col">
+                                <div class="label-box">ALTURA</div>
+                                <div class="value-box">${card.altura.toFixed(1)}m</div>
+                                <div class="sub-value-box">${card.alturaMin ? card.alturaMin.toFixed(1) : '0.0'}m</div>
+                            </div>
+                            <div class="grid-col">
+                                <div class="label-box">PERÍODO</div>
+                                <div class="value-box">${card.periodo || '?'}s</div>
+                                <div class="sub-value-box">SWELL</div>
+                            </div>
+                            <div class="grid-col">
+                                <div class="label-box">VENTO</div>
+                                <div class="value-box">
+                                    <i class="fas fa-arrow-up seta" style="transform: rotate(${card.iconeVento || 0}deg)"></i>
+                                    ${card.ventoDirecao}
+                                </div>
+                                <div class="sub-value-box">${card.ventoVel || '0'}km/h</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('previsao-lista').innerHTML = html;
+            }
+        } catch (e) {
+            console.error("ERRO AO CARREGAR CARDS:", e);
+            document.getElementById('previsao-lista').innerHTML = "<p>Erro ao carregar o mar.</p>";
+        }
+    }
+
+    // 2. Lógica do Botão
+    async function buscarBoletimLocal() {
+        const loader = document.getElementById('loader');
+        const btn = document.getElementById('btn-analisar');
+        const boxBoletim = document.getElementById('boletim-container');
+
+        loader.style.display = 'block';
+        btn.style.display = 'none';
+        boxBoletim.style.display = 'none';
 
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-
-                    // Redireciona para a rota do Controller com as coordenadas
-                    window.location.href = `/zero/boletim-local?lat=${lat}&lon=${lon}`;
+                async (pos) => {
+                     await chamarAPI(-26.89, -48.65);
+                   // await chamarAPI(pos.coords.latitude, pos.coords.longitude); ESSE é o certo, mas esta pegando o endereco errado
                 },
-                (error) => {
-                    alert("Putz! Preciso da localização para saber o pico. Verifique as permissões do navegador.");
-                    document.getElementById('loader').style.display = 'none';
+                async () => {
+                    await chamarAPI(-26.89, -48.65); // Default Navega se negar GPS
                 }
             );
         } else {
-            alert("Seu navegador não suporta geolocalização.");
-            document.getElementById('loader').style.display = 'none';
+            await chamarAPI(-26.89, -48.65);
         }
     }
+
+    // 3. Busca o texto da IA e mostra no balão
+    async function chamarAPI(lat, lon) {
+        try {
+            // Chamando a rota exata do seu Controller: /zero/surf
+            const response = await fetch(`/zero/surf?lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+            
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('btn-analisar').style.display = 'inline-block';
+            
+            const boxBoletim = document.getElementById('boletim-container');
+            const textoBoletim = document.getElementById('texto-boletim');
+
+            // Coloca a resposta da IA no parágrafo
+            textoBoletim.innerText = data.boletim;
+            boxBoletim.style.display = 'block';
+            
+            // Rola suavemente até o texto
+            boxBoletim.scrollIntoView({ behavior: 'smooth' });
+
+        } catch (e) {
+            console.error("ERRO NA API:", e);
+            alert("O Zero tomou uma vaca! Tente novamente.");
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('btn-analisar').style.display = 'inline-block';
+        }
+    }
+
+    // Inicia a carga dos cards
+    carregarPrevisao();
 </script>

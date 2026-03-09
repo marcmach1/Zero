@@ -10,48 +10,40 @@ namespace Zero.Services
         // Removi o HttpClient do construtor para teste de isolamento
         public SurfService() { }
 
-public async Task<string> ObterDadosMaritimos(double lat, double lon)
-{
-    try 
-    {
-        using var handler = new HttpClientHandler();
-        using var client = new HttpClient(handler);
-        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        public async Task<string> ObterDadosMaritimos(double lat, double lon)
+        {
+            try 
+            {
+                using var client = new HttpClient();
+                var culture = System.Globalization.CultureInfo.InvariantCulture;
 
-        // 1. URL DE ONDAS (Marine API) 
-        string urlMarine = string.Format(culture, 
-            "https://marine-api.open-meteo.com/v1/marine?latitude={0:F2}&longitude={1:F2}&hourly=wave_height,wave_period&forecast_days=1", 
-            lat, lon);
-        
-        // 2. URL DE VENTO/TEMPO (Forecast API) 
-        string urlWeather = string.Format(culture, 
-            "https://api.open-meteo.com/v1/forecast?latitude={0:F2}&longitude={1:F2}&hourly=wind_speed_10m,wind_direction_10m,weathercode&forecast_days=1", 
-            lat, lon);
+                // Open-Meteo é sensível ao formato. Usamos "F4" para precisão e cultura Invariant (ponto em vez de vírgula)
+                string urlMarine = $"https://marine-api.open-meteo.com/v1/marine?latitude={lat.ToString(culture)}&longitude={lon.ToString(culture)}&hourly=wave_height,wave_period&forecast_days=1";
+                string urlWeather = $"https://api.open-meteo.com/v1/forecast?latitude={lat.ToString(culture)}&longitude={lon.ToString(culture)}&hourly=wind_speed_10m,wind_direction_10m,weathercode&forecast_days=1";
 
-        // Configuração do Request (Marine)
-        var reqMarine = new HttpRequestMessage(HttpMethod.Get, urlMarine);
-        reqMarine.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
-        var resMarine = await client.SendAsync(reqMarine);
-        var jsonMarine = resMarine.IsSuccessStatusCode ? await resMarine.Content.ReadAsStringAsync() : "{}";
+                client.DefaultRequestHeaders.Add("User-Agent", "ZeroSurfApp/1.0");
 
-        // Configuração do Request (Weather)
-        var reqWeather = new HttpRequestMessage(HttpMethod.Get, urlWeather);
-        reqWeather.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
-       
-        var resWeather = await client.SendAsync(reqWeather);
-        var jsonWeather = resWeather.IsSuccessStatusCode ? await resWeather.Content.ReadAsStringAsync() : "{}";
+                // Buscando dados de Ondas
+                var resMarine = await client.GetAsync(urlMarine);
+                if (!resMarine.IsSuccessStatusCode) throw new Exception($"Erro API Marine: {resMarine.StatusCode}");
+                var jsonMarine = await resMarine.Content.ReadAsStringAsync();
 
-       
-        // Limitamos o tamanho para não estourar o prompt (Substring)
-        string resultadoUnificado = $"[DADOS_ONDAS]: {jsonMarine} | [DADOS_VENTO]: {jsonWeather}";
+                // Buscando dados de Vento
+                var resWeather = await client.GetAsync(urlWeather);
+                if (!resWeather.IsSuccessStatusCode) throw new Exception($"Erro API Weather: {resWeather.StatusCode}");
+                var jsonWeather = await resWeather.Content.ReadAsStringAsync();
 
-        return resultadoUnificado.Length > 3000 ? resultadoUnificado.Substring(0, 3000) : resultadoUnificado;
-    }
-    catch (Exception ex)
-    {
-        return $"{{\"boletim\":\"Erro fatal: {ex.Message}\"}}";
-    }
-}
+                // IMPORTANTE: Montamos a string garantindo que o delimitador | SEMPRE exista
+                // Removi o Substring fixo para evitar cortar o delimitador no meio
+                return $"[DADOS_ONDAS]: {jsonMarine} | [DADOS_VENTO]: {jsonWeather}";
+            }
+            catch (Exception ex)
+            {
+                // Se der erro aqui, retornamos uma string que o Controller consiga dar Split sem crashar
+                Console.WriteLine($"--- ERRO NO SERVICE: {ex.Message}");
+                return $"[DADOS_ONDAS]: {{}} | [DADOS_VENTO]: {{}} | ERRO: {ex.Message}";
+            }
+        }
       
 
         public async Task<string> GetTideDataAsync(double lat, double lon)

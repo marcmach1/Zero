@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using Zero.Services;
-using System.Text.Json; // Importa o Helper para usar a tradução do clima
-
-namespace Zero.Controllers;
+using Zero.Models;
+using Zero.Helpers;
 
 [ApiController]
 [Route("zero")]
@@ -12,7 +12,6 @@ public class ZeroController : Controller
     private readonly SurfService _surfService;
     private readonly LocationService _locationService;
 
-    // Injetamos o LocationService aqui também para o Controller reconhecer o serviço
     public ZeroController(GeminiService geminiService, SurfService surfService, LocationService locationService)
     {
         _geminiService = geminiService;
@@ -20,39 +19,33 @@ public class ZeroController : Controller
         _locationService = locationService;
     }
 
-    [HttpGet("perguntar")]
-    public async Task<IActionResult> Get(string prompt)
-    {
-        var resposta = await _geminiService.Perguntar(prompt);
-        return Ok(new { resposta });
-    }
-
-    // Esta é a rota que o seu botão na Home chama agora
-    [HttpGet("boletim-local")]
-public IActionResult BoletimLocal(double lat, double lon)
-    {
-        // Apenas abre a página. O JS da página vai ler lat e lon da URL.
-        return View("Surf");
-    }
-
-  
-   
     [HttpGet("surf")]
-    public async Task<IActionResult> GetSurfReport(double lat = -26.89, double lon = -48.65)
+    public async Task<IActionResult> GetBoletim(double lat, double lon)
     {
-        // Garantia de coordenadas caso o navegador falhe
-        if (lat == 0) lat = -26.89;
-        if (lon == 0) lon = -48.65;
-
-        var resultadoBruto = await _surfService.ObterDadosMaritimos(lat, lon);
-        Console.WriteLine($"Dados brutos recebidos: {resultadoBruto}");
-
         try
         {
-            // 1. Separação dos JSONs
+            // Fallback para Navegantes se as coordenadas forem zero
+            if (lat == 0) lat = -26.89;
+            if (lon == 0) lon = -48.65;
+
+            var resultadoBruto = await _surfService.ObterDadosMaritimos(lat, lon);
+            
+            // --- PROTEÇÃO CONTRA O ERRO DE SPLIT ---
+            if (string.IsNullOrEmpty(resultadoBruto) || !resultadoBruto.Contains("|"))
+            {
+                Console.WriteLine($"--- ERRO FORMATO: O serviço retornou: {resultadoBruto}");
+                return Ok(new { boletim = "O Zero tentou olhar o mar, mas a neblina (erro de conexão) não deixou ver nada!", previsaoCards = new List<object>() });
+            }
+
             var partes = resultadoBruto.Split('|');
             var jsonOndas = partes[0].Replace("[DADOS_ONDAS]: ", "").Trim();
             var jsonVento = partes[1].Replace("[DADOS_VENTO]: ", "").Trim();
+
+            // --- VALIDAÇÃO DE JSON VAZIO ---
+            if (jsonOndas == "{}" || jsonVento == "{}")
+            {
+                return Ok(new { boletim = "As boias de sinalização estão offline agora. Tenta daqui a pouco!", previsaoCards = new List<object>() });
+            }
 
             using var docOndas = JsonDocument.Parse(jsonOndas);
             using var docVento = JsonDocument.Parse(jsonVento);
@@ -60,83 +53,97 @@ public IActionResult BoletimLocal(double lat, double lon)
             var hourlyOndas = docOndas.RootElement.GetProperty("hourly");
             var hourlyVento = docVento.RootElement.GetProperty("hourly");
 
-            // 2. Lógica de Índice de Horário com Fallback
-            int indiceHora = DateTime.Now.Hour;
-            var waveArray = hourlyOndas.GetProperty("wave_height");
+            // 1. Gera a lista para os cards
+            var previsaoCards = ExtrairPrevisaoCards(hourlyOndas, hourlyVento);
 
-            // Se o dado da hora atual for nulo, tenta a hora anterior (resiliência)
-            if (waveArray[indiceHora].ValueKind == JsonValueKind.Null && indiceHora > 0)
-            {
-                indiceHora--;
-            }
+            // 2. Dados para o boletim atual (UTC para bater com a API)
+            int indiceHora = DateTime.UtcNow.Hour;
+            
+            // Garantindo que o índice não estoure o array da API
+            int maxIndices = hourlyOndas.GetProperty("wave_height").GetArrayLength();
+            if (indiceHora >= maxIndices) indiceHora = maxIndices - 1;
 
-            // 3. Funções de extração segura (Null-Safe)
-            double SafeGetDouble(JsonElement element) => 
-                element.ValueKind == JsonValueKind.Number ? element.GetDouble() : 0.0;
-
-            int SafeGetInt(JsonElement element) => 
-                element.ValueKind == JsonValueKind.Number ? element.GetInt32() : 0;
-
-            // 4. Captura dos dados
-            double altura = SafeGetDouble(waveArray[indiceHora]);
+            double altura = SafeGetDouble(hourlyOndas.GetProperty("wave_height")[indiceHora]);
             double periodo = SafeGetDouble(hourlyOndas.GetProperty("wave_period")[indiceHora]);
             double ventoVel = SafeGetDouble(hourlyVento.GetProperty("wind_speed_10m")[indiceHora]);
             double ventoDir = SafeGetDouble(hourlyVento.GetProperty("wind_direction_10m")[indiceHora]);
-            int climaCode = SafeGetInt(hourlyVento.GetProperty("weathercode")[indiceHora]);
+            int climaCode = hourlyVento.GetProperty("weathercode")[indiceHora].GetInt32();
 
-            // 5. Traduções
-            string climaTraduzido = Helpers.WeatherHelper.TraduzirWeatherCode(climaCode);
-            string ventoCardeal = Helpers.WeatherHelper.ConverterDirecaoVento(ventoDir);
+            string climaTraduzido = WeatherHelper.TraduzirWeatherCode(climaCode);
+            string ventoCardeal = WeatherHelper.ConverterDirecaoVento(ventoDir);
+            string infoOndas = (altura <= 0) ? "Flat ou sensores offline" : $"{altura:F1}m";
 
-            // 6. Lógica de strings para o Prompt (Avisa o Zero se a onda sumiu)
-            string infoOndas = (altura <= 0) ? "Sensores de boia temporariamente offline" : $"{altura}m";
-            string infoPeriodo = (periodo <= 0) ? "Não disponível" : $"{periodo}s";
-
-            // 7. Prompt Estruturado
+            // 3. IA Processa o Boletim
             string promptFinal = $@"
                 Você é o Zero, surfista local de Navegantes/SC. 
-                Analise os dados reais abaixo e gere um boletim ORGANIZADO por tópicos.
-                IMPORTANTE: Se as ondas estiverem como 'offline', avise a galera mas foque no vento e visual.
-
-                📊 DADOS REAIS DE AGORA:
+                🚨 CONDIÇÕES REAIS AGORA:
                 - ONDAS: {infoOndas}
-                - PERÍODO: {infoPeriodo}
+                - PERÍODO: {periodo}s
                 - VENTO: {ventoVel} km/h de {ventoCardeal}
-                - TEMPO: {climaTraduzido}
-
-                ---
-                ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
-                🤙 **SALVE, MESTRE!** (Saudação curta)
-
-                🌊 **CONDIÇÕES DO MAR**
-                (Analise {infoOndas} e {infoPeriodo})
-
-                💨 **VENTO E FORMAÇÃO**
-                {ventoVel} km/h de {ventoCardeal} (Explique se é Terral, Maral ou de lado em Navega)
-
-                🌤️ **VISUAL**
-                {climaTraduzido}
-
-                📌 **VEREDITO DO ZERO**
-                (Vale a caída ou melhor esperar?)
-
-                📍 **DICA PRA ACERTAR O PICO**
-                (Sugira um ponto em Navegantes ou região)
-                ---";
+                - CLIMA: {climaTraduzido}
+                Gere um boletim curto com gírias de surfista (ex: 'tá rolando', 'outside', 'vaca', 'merreca').";
 
             var respostaIA = await _geminiService.Perguntar(promptFinal);
+            Console.WriteLine($"--- RESPOSTA DO ZERO ---\n{promptFinal}");
+
+            Console.WriteLine($"--- BOLETIM GERADO ---\n{respostaIA}");
 
             return Ok(new { 
                 boletim = respostaIA, 
-                dados_tecnicos = new { altura, periodo, ventoVel, ventoCardeal, climaTraduzido, horaSincronizada = indiceHora },
+                previsaoCards = previsaoCards,
+                dados_tecnicos = new { altura, periodo, ventoVel, ventoCardeal, climaTraduzido },
                 cidade = "Navegantes" 
             });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erro crítico: {ex.Message}");
-            var fallback = await _geminiService.Perguntar("Zero, os sensores pifaram de vez. Dá um salve na galera de Navega, avisa do erro técnico e diz pra olharem pela câmera do Porto!");
-            return Ok(new { boletim = fallback, erro = ex.Message });
+            Console.WriteLine($"--- ERRO NO CONTROLLER: {ex.Message}");
+            return StatusCode(500, new { 
+                boletim = "Putz, o Zero tomou uma vaca feia no código!", 
+                erro = ex.Message 
+            });
         }
+    }
+
+    private double SafeGetDouble(JsonElement element) => 
+        element.ValueKind == JsonValueKind.Number ? element.GetDouble() : 0.0;
+
+    private List<PrevisaoPeriodoDTO> ExtrairPrevisaoCards(JsonElement hourlyOndas, JsonElement hourlyVento)
+    {
+        var cards = new List<PrevisaoPeriodoDTO>();
+        int[] horasDesejadas = { 9, 15 }; 
+        string[] nomes = { "Manhã", "Tarde" };
+
+        try {
+            for (int dia = 0; dia < 2; dia++)
+            {
+                for (int i = 0; i < horasDesejadas.Length; i++)
+                {
+                    int hora = horasDesejadas[i];
+                    int indice = hora + (dia * 24);
+                    
+                    var heightProp = hourlyOndas.GetProperty("wave_height");
+                    if (indice >= heightProp.GetArrayLength()) continue;
+
+                    double altura = SafeGetDouble(heightProp[indice]);
+                    double ventoDir = SafeGetDouble(hourlyVento.GetProperty("wind_direction_10m")[indice]);
+                    double ventoV = SafeGetDouble(hourlyVento.GetProperty("wind_speed_10m")[indice]);
+                    double p = SafeGetDouble(hourlyOndas.GetProperty("wave_period")[indice]);
+
+                    cards.Add(new PrevisaoPeriodoDTO {
+                        Titulo = $"{DateTime.Now.AddDays(dia):ddd / dd} - {nomes[i]}".ToUpper(),
+                        Altura = altura,
+                        AlturaMin = altura * 0.7, // Simulação de variação
+                        Periodo = (int)p,
+                        VentoVel = (int)ventoV,
+                        VentoDirecao = WeatherHelper.ConverterDirecaoVento(ventoDir),
+                        IconeVento = (int)ventoDir // Passando os graus para a seta girar
+                    });
+                }
+            }
+        } catch (Exception ex) {
+            Console.WriteLine("Erro ao gerar cards: " + ex.Message);
+        }
+        return cards;
     }
 }
